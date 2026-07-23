@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dual-Engine Quantitative Terminal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 font-mono p-6 min-h-screen">
+
+  <div class="flex justify-between items-center border-b border-zinc-800 pb-4 mb-6">
+    <div>
+      <h1 class="text-lg font-bold tracking-wider text-zinc-50 uppercase">Dual-Engine Strategy Terminal</h1>
+      <p class="text-xs text-zinc-500">SYSTEMATIC ALLOCATION MODEL // LIVE SIGNAL FEED</p>
+    </div>
+    <div class="flex items-center space-x-3">
+      <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+      <span class="text-xs text-zinc-400">ENGINE ONLINE</span>
+    </div>
+  </div>
+
+  <div id="loading" class="text-center text-zinc-500 py-12">
+    <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping mr-2"></span>
+    FETCHING QUANT TELEMETRY...
+  </div>
+
+  <div id="dashboard" class="hidden grid grid-cols-12 gap-6">
+    
+    <div class="col-span-12 lg:col-span-4 bg-zinc-900 border border-zinc-800 p-4 rounded-sm">
+      <div class="text-xs text-zinc-500 mb-3 tracking-wider uppercase font-semibold">01 / Macro Regime Filter</div>
+      <div class="flex justify-between items-baseline mb-4">
+        <span id="spy-close" class="text-2xl font-semibold tracking-tight">$0.00</span>
+        <span id="macro-status" class="text-xs px-2 py-0.5 rounded uppercase font-semibold">LOADING</span>
+      </div>
+      <div class="grid grid-cols-2 gap-2 text-xs border-t border-zinc-800/60 pt-3 text-zinc-400">
+        <div>50-SMA: <span id="sma50" class="text-zinc-200">$0.00</span></div>
+        <div>200-SMA: <span id="sma200" class="text-zinc-200">$0.00</span></div>
+      </div>
+    </div>
+
+    <div class="col-span-12 lg:col-span-8 bg-zinc-900 border border-zinc-800 p-4 rounded-sm">
+      <div class="text-xs text-zinc-500 mb-3 tracking-wider uppercase font-semibold">02 / Quick-Trader Engine (25% Weight)</div>
+      <table class="w-full text-left text-xs border-collapse">
+        <thead>
+          <tr class="text-zinc-500 border-b border-zinc-800">
+            <th class="py-2">ASSET</th>
+            <th class="py-2">RSI(2) / THRESH</th>
+            <th class="py-2">RSI(4) / THRESH</th>
+            <th class="py-2 text-right">ACTION</th>
+          </tr>
+        </thead>
+        <tbody id="quick-trader-rows" class="divide-y divide-zinc-800/50"></tbody>
+      </table>
+    </div>
+
+    <div class="col-span-12 bg-zinc-900 border border-zinc-800 p-4 rounded-sm">
+      <div class="text-xs text-zinc-500 mb-3 tracking-wider uppercase font-semibold">03 / Phase 3 Momentum Leaders (75% Target)</div>
+      <div id="phase3-container"></div>
+    </div>
+
+  </div>
+
+  <script>
+    const API_URL = 'https://duel-engine-trader.onrender.com/api/v1/telemetry';
+
+    async function loadTelemetry() {
+      try {
+        const res = await fetch(API_URL);
+        const data = await res.json();
+
+        // 1. Render Macro Section
+        document.getElementById('spy-close').innerText = `$${data.macro.spy_close}`;
+        document.getElementById('sma50').innerText = `$${data.macro.sma50}`;
+        document.getElementById('sma200').innerText = `$${data.macro.sma200}`;
+        
+        const statusEl = document.getElementById('macro-status');
+        statusEl.innerText = data.macro.status;
+        if (data.macro.status === 'BULLISH') {
+          statusEl.className = 'text-xs px-2 py-0.5 rounded uppercase font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800';
+        } else {
+          statusEl.className = 'text-xs px-2 py-0.5 rounded uppercase font-semibold bg-rose-950 text-rose-400 border border-rose-800';
+        }
+
+        // 2. Render Quick-Trader Section
+        const qtRows = document.getElementById('quick-trader-rows');
+        qtRows.innerHTML = data.quick_trader.map(item => `
+          <tr class="hover:bg-zinc-800/30">
+            <td class="py-2 font-bold text-zinc-200">${item.asset}</td>
+            <td class="py-2 text-zinc-400">${item.rsi2} <span class="text-zinc-600">/ ${item.rsi2_thresh}</span></td>
+            <td class="py-2 text-zinc-400">${item.rsi4} <span class="text-zinc-600">/ ${item.rsi4_thresh}</span></td>
+            <td class="py-2 text-right">
+              ${item.signal 
+                ? '<span class="text-emerald-400 font-bold bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-700">BUY ALLOC</span>' 
+                : '<span class="text-zinc-600">NO TRADE</span>'}
+            </td>
+          </tr>
+        `).join('');
+
+        // 3. Render Phase 3 Section
+        const p3Container = document.getElementById('phase3-container');
+        if (data.phase_3.length > 0) {
+          p3Container.innerHTML = `
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="text-zinc-500 border-b border-zinc-800">
+                  <th class="py-2">RANK</th>
+                  <th class="py-2">ASSET</th>
+                  <th class="py-2">TREND INTENSITY</th>
+                  <th class="py-2">21D HIST VOL</th>
+                  <th class="py-2 text-right">TARGET WEIGHT</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-zinc-800/50">
+                ${data.phase_3.map((item, idx) => `
+                  <tr class="hover:bg-zinc-800/30">
+                    <td class="py-2 text-zinc-500">#0${idx + 1}</td>
+                    <td class="py-2 font-bold text-zinc-100">${item.asset}</td>
+                    <td class="py-2 text-zinc-300">${(item.intensity * 100).toFixed(2)}%</td>
+                    <td class="py-2 text-zinc-400">${(item.vol * 100).toFixed(1)}%</td>
+                    <td class="py-2 text-right font-bold text-emerald-400">${(item.weight * 100).toFixed(2)}%</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `;
+        } else {
+          p3Container.innerHTML = `
+            <div class="text-xs text-zinc-500 py-4 text-center border border-dashed border-zinc-800">
+              NO ASSETS CURRENTLY PASS PHASE 3 TREND FILTERS (HOLDING CASH)
+            </div>
+          `;
+        }
+
+        // Show Dashboard
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('dashboard').classList.remove('hidden');
+
+      } catch (err) {
+        document.getElementById('loading').innerText = 'ERROR LOADING QUANT TELEMETRY';
+      }
+    }
+
+    loadTelemetry();
+  </script>
+</body>
+</html>
